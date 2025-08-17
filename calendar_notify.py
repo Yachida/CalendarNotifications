@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import requests
 import datetime
 import sys
-import json
+from collections import defaultdict
 
 load_dotenv()
 
@@ -14,33 +14,6 @@ SLACK_CHANNEL_ID = os.environ.get('SLACK_CHANNEL_ID')
 
 NOTION_API_URL = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
 NOTION_VERSION = "2022-06-28"
-
-# NotionユーザーID→表示名のマッピングを都度APIで取得
-
-def get_notion_user_map():
-    """Notion APIから全ユーザー情報を取得し、ID→名前の辞書を返す"""
-    url = "https://api.notion.com/v1/users"
-    headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Notion-Version": NOTION_VERSION
-    }
-    user_map = {}
-    next_cursor = None
-    while True:
-        params = {"page_size": 100}
-        if next_cursor:
-            params["start_cursor"] = next_cursor
-        resp = requests.get(url, headers=headers, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        for user in data.get("results", []):
-            if user["object"] == "user":
-                user_map[user["id"]] = user.get("name", "")
-        if data.get("has_more"):
-            next_cursor = data.get("next_cursor")
-        else:
-            break
-    return user_map
 
 def get_today_events():
     today = datetime.date.today().isoformat()
@@ -85,7 +58,7 @@ def get_next_week_events():
 
 def format_event(event):
     props = event["properties"]
-    title = props["Name"]["title"][0]["plain_text"] if props["Name"]["title"] else "(無題)"
+    title = props["Name"]["title"][0]["plain_text"] if props["Name"]["title"] and len(props["Name"]["title"]) > 0 else "(無題)"
     date_info = props["Date"]["date"] if "Date" in props and props["Date"]["date"] else None
     # Personプロパティのnameを取得（複数対応）
     person = ""
@@ -147,14 +120,12 @@ def main():
         if not events:
             message = "No events scheduled for next week."
         else:
-            from collections import defaultdict
             day_events = defaultdict(list)
             for event in events:
                 date_info = event["properties"]["Date"]["date"] if "Date" in event["properties"] and event["properties"]["Date"]["date"] else None
                 day = date_info["start"][:10] if date_info else "(Unknown date)"
                 day_events[day].append(event)
             lines = ["Next Week's Calendar Events"]
-            import calendar
             weekday_en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
             for day in sorted(day_events.keys()):
                 dt = None
@@ -202,7 +173,6 @@ def test_notion_connection():
         print(event)
 
 if __name__ == "__main__":
-    # main()
     if len(sys.argv) > 1 and sys.argv[1] == "test_notion":
         test_notion_connection()
     elif len(sys.argv) > 1 and sys.argv[1] == "test":
