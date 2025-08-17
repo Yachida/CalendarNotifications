@@ -6,7 +6,7 @@
 本システムは、Notionで管理されているカレンダーの予定を、指定した時刻にSlackの特定チャンネルへ自動で通知することを目的とする。これにより、チームメンバーや個人がその日の予定を簡単に把握し、業務の効率化を図る。
 
 ### 1.2. システム概要
-Notion APIを利用してカレンダー情報を取得し、整形した上でSlack API経由でメッセージを投稿する。この一連の処理を**GitHub Actions**を利用して定期的に実行する。
+Notion APIを利用してカレンダー情報を取得し、整形した上でSlack API経由でメッセージを投稿する。この一連の処理を**Python**で実装し、**GitHub Actions**を利用して定期的に実行する。
 
 ## 2. システム構成
 
@@ -25,7 +25,7 @@ graph TD
 | 役割 | サービス/技術 | 備考 |
 | :--- | :--- | :--- |
 | **実行環境・定期実行** | GitHub Actions | 本システムの運用には十分な無料枠が存在。cronでスケジュール実行。 |
-| **開発言語** | Python / Node.js | API連携やデータ加工に適した言語 |
+| **開発言語** | Python | API連携やデータ加工に適した言語 |
 | **Notion連携** | Notion API | Notionのデータベースから情報を取得 |
 | **Slack連携** | Slack API (Incoming Webhooks) | Slackへメッセージを投稿 |
 
@@ -93,7 +93,7 @@ graph TD
 -   Slackのボタン操作で、明日の予定をオンデマンドで取得できる機能。（※別途サーバー環境が必要になる可能性があります）
 
 ## 7. 開発の進め方 (推奨)
-1.  **ローカル開発:** まずはローカルマシン上で、Notionからデータを取得し、Slackに通知するスクリプト（PythonまたはNode.js）を作成する。
+1.  **ローカル開発:** まずはローカルマシン上で、Notionからデータを取得し、Slackに通知するスクリプト（Python）を作成する。
 2.  **GitHubリポジトリ作成:** 作成したスクリプトを管理するためのGitHubリポジトリを作成する。
 3.  **機密情報の設定:** GitHubリポジトリの `Settings` > `Secrets and variables` > `Actions` に、以下の情報を登録する。
     -   `NOTION_API_KEY`: NotionのAPIキー
@@ -101,6 +101,47 @@ graph TD
     -   `SLACK_WEBHOOK_URL`: SlackのIncoming Webhook URL
 4.  **GitHub Actionsワークフロー作成:** `.github/workflows/` ディレクトリに、以下の処理を行うYAMLファイルを作成する。
     -   `on: schedule:` で、毎日定刻に実行するよう設定 (例: `cron: '0 0 * * 1-5'` で平日の日本時間午前9時)
-    -   Python/Node.jsの実行環境をセットアップする。
+    -   Pythonの実行環境をセットアップする。
     -   依存ライブラリ（`requests`など）をインストールする。
     -   Secretsに登録した情報を環境変数として読み込み、通知スクリプトを実行する。
+
+## 8. ローカル環境での環境変数設定方法
+
+ローカルでスクリプトを実行する場合は、`.env`ファイルを利用して環境変数を設定できます。
+
+1. `.env.example` をコピーして `.env` ファイルを作成します。
+   ```sh
+   cp .env.example .env
+   ```
+2. `.env` ファイル内の各項目に、取得したAPIキーやWebhook URLを記入します。
+
+- `.env` ファイルは `.gitignore` によりGit管理対象外です。
+- GitHub Actionsでは、これらの値はリポジトリの「Settings > Secrets and variables > Actions」で設定し、`.env`は不要です。
+
+## 9. GitHub Actionsによる自動通知
+
+本リポジトリでは、2種類のGitHub Actionsワークフローで自動通知を実行します。
+
+- 平日9時（日本時間）: `calendar_notify.py` を引数なしで実行（`.github/workflows/notify_calendar_daily.yml`）
+- 週次（毎週金曜17時、日本時間）: `calendar_notify.py weekly` を実行（`.github/workflows/notify_calendar_weekly.yml`）
+
+コマンドライン引数で`daily`/`weekly`を切り替え、用途ごとに通知内容を分岐できます。
+
+## 10. Slack通知メッセージ例（表示仕様）
+
+Notionから取得した予定は、以下のような形式でSlackに通知されます。
+
+```
+【今日のカレンダー予定】
+- 10:00-11:00 山田太郎 定例ミーティング
+- 14:00-15:00 佐藤花子 顧客訪問
+- 鈴木一郎 終日休暇
+```
+
+- 時間ありの場合は「開始-終了（hh:mm-hh:mm）」を表示、終日の場合は時間表示なし
+- Personプロパティ（担当者・参加者）を先頭に表示
+- titleプロパティ（予定内容）を表示
+- Notionページへのリンクは含めません
+- 予定がない場合は「今日の予定はありません」と通知されます
+
+> 通知内容はNotionデータベースのプロパティ構成に応じて自動で整形されます。
