@@ -1,0 +1,32 @@
+name: NotionカレンダーSlack通知（平日朝）
+
+on:
+  schedule:
+    - cron: '0 0 * * 1-5' # 平日毎日 日本時間9時（JST=UTC+9）
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+      - name: Pythonセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 依存パッケージインストール
+        run: pip install -r requirements.txt
+      - name: 環境変数の確認
+        run: |
+          echo "NOTION_API_KEY=${{ secrets.NOTION_API_KEY }}"
+          echo "NOTION_DATABASE_ID=${{ secrets.NOTION_DATABASE_ID }}"
+          echo "SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}"
+          echo "SLACK_CHANNEL_ID=${{ secrets.SLACK_CHANNEL_ID }}"
+      - name: 通知スクリプト実行
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: python calendar_notify.py
